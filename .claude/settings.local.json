@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(BASE=/Users/anderssoncosta/DEV/andersson/backend-erp/src/modules:*)",
+      "Bash(__NEW_LINE_2b40ce52de7359ca__ for mod in field-execution materials fleet vehicle-tracking scheduling projects assets helpdesk call-center reports hr time-tracking safety works public-lighting notifications audit settings clients contracts)",
+      "Bash(do)",
+      "Bash(MOK=true)",
+      "Bash(test:*)",
+      "Bash(MOK=false:*)",
+      "Bash(if [ \"$MOK\" = \"true\" ])",
+      "Bash(then)",
+      "Bash(echo:*)",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e:*)",
+      "Bash(npx prisma validate:*)",
+      "Bash(npx prisma generate:*)"
+    ]
+  }
+}
