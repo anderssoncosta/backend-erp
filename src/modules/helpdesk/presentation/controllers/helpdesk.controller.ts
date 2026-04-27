@@ -5,39 +5,24 @@ import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard'
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
 import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { HelpdeskService } from '../../application/services/helpdesk.service';
 
 @ApiTags('Helpdesk')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller({ path: 'helpdesk', version: '1' })
 export class HelpdeskController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly helpdeskService: HelpdeskService) {}
 
   @Post('tickets')
   @ApiOperation({ summary: 'Create ticket' })
   @Permissions('helpdesk', 'create')
   createTicket(
-    @Body() body: {
-      title: string; description: string; category: string;
-      priority?: string; assignedToId?: string; serviceOrderId?: string;
-    },
+    @Body() body: { title: string; description: string; category: string; priority?: string; assignedToId?: string; serviceOrderId?: string },
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.ticket.create({
-      data: {
-        tenantId,
-        title: body.title,
-        description: body.description,
-        category: body.category,
-        priority: body.priority ?? 'MEDIUM',
-        requesterId: user.id,
-        assignedToId: body.assignedToId,
-        serviceOrderId: body.serviceOrderId,
-        status: 'OPEN',
-      },
-    });
+    return this.helpdeskService.createTicket(tenantId, user.id, body);
   }
 
   @Get('tickets')
@@ -51,30 +36,14 @@ export class HelpdeskController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.ticket.findMany({
-      where: {
-        tenantId,
-        ...(status && { status }),
-        ...(priority && { priority }),
-        ...(assignedToId && { assignedToId }),
-      },
-      include: { _count: { select: { comments: true } } },
-      orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.helpdeskService.listTickets(tenantId, status, priority, assignedToId, page, limit);
   }
 
   @Get('tickets/:id')
   @ApiOperation({ summary: 'Get ticket by ID' })
   @Permissions('helpdesk', 'read')
   getTicket(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.ticket.findFirst({
-      where: { id, tenantId },
-      include: {
-        comments: { orderBy: { createdAt: 'asc' } },
-      },
-    });
+    return this.helpdeskService.getTicket(id, tenantId);
   }
 
   @Patch('tickets/:id')
@@ -85,18 +54,7 @@ export class HelpdeskController {
     @Body() body: { status?: string; priority?: string; assignedToId?: string; resolvedAt?: string; resolution?: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.ticket.updateMany({
-      where: { id, tenantId },
-      data: {
-        ...(body.status && { status: body.status }),
-        ...(body.priority && { priority: body.priority }),
-        ...(body.assignedToId !== undefined && { assignedToId: body.assignedToId }),
-        ...(body.resolvedAt && { resolvedAt: new Date(body.resolvedAt) }),
-        ...(body.resolution && { resolution: body.resolution }),
-        ...(body.status === 'RESOLVED' && !body.resolvedAt && { resolvedAt: new Date() }),
-        ...(body.status === 'CLOSED' && { closedAt: new Date() }),
-      },
-    });
+    return this.helpdeskService.updateTicket(id, tenantId, body);
   }
 
   @Post('tickets/:id/comments')
@@ -107,13 +65,6 @@ export class HelpdeskController {
     @Body() body: { content: string; isInternal?: boolean },
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.ticketComment.create({
-      data: {
-        ticketId,
-        authorId: user.id,
-        content: body.content,
-        isInternal: body.isInternal ?? false,
-      },
-    });
+    return this.helpdeskService.addComment(ticketId, user.id, body.content, body.isInternal);
   }
 }

@@ -13,7 +13,7 @@ import { TransferStockUseCase } from '../../application/use-cases/transfer-stock
 import { RegisterEntryDto } from '../../application/use-cases/register-entry/register-entry.dto';
 import { RegisterExitDto } from '../../application/use-cases/register-exit/register-exit.dto';
 import { TransferStockDto } from '../../application/use-cases/transfer-stock/transfer-stock.dto';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { InventoryService } from '../../application/services/inventory.service';
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
@@ -24,20 +24,14 @@ export class InventoryController {
     private readonly registerEntryUseCase: RegisterEntryUseCase,
     private readonly registerExitUseCase: RegisterExitUseCase,
     private readonly transfer: TransferStockUseCase,
-    private readonly prisma: PrismaService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   @Get('stock')
   @ApiOperation({ summary: 'List stock positions' })
   @Permissions('inventory', 'read')
-  async getStock(
-    @CurrentTenant() tenantId: string,
-    @Query('branchId') branchId?: string,
-  ) {
-    return this.prisma.stockItem.findMany({
-      where: { tenantId, ...(branchId && { branchId }), isActive: true },
-      include: { material: { select: { id: true, code: true, name: true, unit: true, minStock: true } } },
-    });
+  getStock(@CurrentTenant() tenantId: string, @Query('branchId') branchId?: string) {
+    return this.inventoryService.getStock(tenantId, branchId);
   }
 
   @Post('movements/entry')
@@ -73,17 +67,7 @@ export class InventoryController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.stockMovement.findMany({
-      where: {
-        tenantId,
-        ...(materialId && { materialId }),
-        ...(branchId && { branchId }),
-        ...(type && { type }),
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.inventoryService.getMovements(tenantId, materialId, branchId, type, page, limit);
   }
 
   @Post('transfers')
@@ -101,12 +85,7 @@ export class InventoryController {
   @ApiOperation({ summary: 'List transfers' })
   @Permissions('inventory', 'read')
   getTransfers(@CurrentTenant() tenantId: string, @Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.prisma.stockTransfer.findMany({
-      where: { tenantId },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit, take: limit,
-    });
+    return this.inventoryService.getTransfers(tenantId, page, limit);
   }
 
   @Get('materials')
@@ -118,18 +97,7 @@ export class InventoryController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.material.findMany({
-      where: {
-        tenantId, deletedAt: null, isActive: true,
-        ...(search && { OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { code: { contains: search, mode: 'insensitive' } },
-        ]}),
-      },
-      include: { group: true },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * limit, take: limit,
-    });
+    return this.inventoryService.getMaterials(tenantId, search, page, limit);
   }
 
   @Post('materials')
@@ -142,16 +110,13 @@ export class InventoryController {
     },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.material.create({ data: { ...data, tenantId, isActive: true } });
+    return this.inventoryService.createMaterial(tenantId, data);
   }
 
   @Get('materials/:id')
   @ApiOperation({ summary: 'Get material by ID' })
   @Permissions('inventory', 'read')
   getMaterial(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.material.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: { group: true },
-    });
+    return this.inventoryService.getMaterial(id, tenantId);
   }
 }

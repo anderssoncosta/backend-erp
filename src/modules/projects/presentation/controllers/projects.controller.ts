@@ -5,21 +5,21 @@ import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard'
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
 import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { ProjectsService } from '../../application/services/projects.service';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller({ path: 'projects', version: '1' })
 export class ProjectsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly projectsService: ProjectsService) {}
 
   // ─── Projects ──────────────────────────────────────────────────────────────
 
   @Post()
   @ApiOperation({ summary: 'Create project' })
   @Permissions('projects', 'create')
-  async create(
+  create(
     @Body() body: {
       code: string; name: string; description?: string; clientId?: string; contractId?: string;
       managerId?: string; startDate?: string; endDate?: string; budget?: number;
@@ -27,21 +27,7 @@ export class ProjectsController {
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.project.create({
-      data: {
-        tenantId,
-        code: body.code,
-        name: body.name,
-        description: body.description,
-        clientId: body.clientId,
-        contractId: body.contractId,
-        managerId: body.managerId ?? user.id,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-        budget: body.budget,
-        status: 'PLANNING',
-      },
-    });
+    return this.projectsService.create(tenantId, user.id, body);
   }
 
   @Get()
@@ -55,32 +41,14 @@ export class ProjectsController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.project.findMany({
-      where: {
-        tenantId,
-        deletedAt: null,
-        ...(status && { status }),
-        ...(clientId && { clientId }),
-        ...(managerId && { managerId }),
-      },
-      include: { _count: { select: { phases: true, tasks: true } } },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.projectsService.list(tenantId, status, clientId, managerId, page, limit);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get project by ID' })
   @Permissions('projects', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.project.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: {
-        phases: { include: { tasks: true }, orderBy: { order: 'asc' } },
-        tasks: { orderBy: { createdAt: 'asc' } },
-      },
-    });
+    return this.projectsService.findOne(id, tenantId);
   }
 
   @Patch(':id/status')
@@ -91,10 +59,7 @@ export class ProjectsController {
     @Body() body: { status: string; progress?: number },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.project.updateMany({
-      where: { id, tenantId },
-      data: { status: body.status, ...(body.progress !== undefined && { progress: body.progress }) },
-    });
+    return this.projectsService.updateStatus(id, tenantId, body.status, body.progress);
   }
 
   // ─── Phases ────────────────────────────────────────────────────────────────
@@ -106,17 +71,7 @@ export class ProjectsController {
     @Param('id', ParseUUIDPipe) projectId: string,
     @Body() body: { name: string; description?: string; order?: number; startDate?: string; endDate?: string },
   ) {
-    return this.prisma.projectPhase.create({
-      data: {
-        projectId,
-        name: body.name,
-        description: body.description,
-        order: body.order ?? 1,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-        status: 'PENDING',
-      },
-    });
+    return this.projectsService.createPhase(projectId, body);
   }
 
   // ─── Tasks ─────────────────────────────────────────────────────────────────
@@ -132,19 +87,7 @@ export class ProjectsController {
     },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.projectTask.create({
-      data: {
-        tenantId,
-        projectId,
-        phaseId: body.phaseId,
-        title: body.title,
-        description: body.description,
-        assignedToId: body.assignedToId,
-        dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-        priority: body.priority ?? 'MEDIUM',
-        status: 'TODO',
-      },
-    });
+    return this.projectsService.createTask(projectId, tenantId, body);
   }
 
   @Patch('tasks/:taskId/status')
@@ -155,13 +98,6 @@ export class ProjectsController {
     @Body() body: { status: string; completedAt?: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.projectTask.updateMany({
-      where: { id: taskId, tenantId },
-      data: {
-        status: body.status,
-        ...(body.completedAt && { completedAt: new Date(body.completedAt) }),
-        ...(body.status === 'DONE' && !body.completedAt && { completedAt: new Date() }),
-      },
-    });
+    return this.projectsService.updateTaskStatus(taskId, tenantId, body.status, body.completedAt);
   }
 }

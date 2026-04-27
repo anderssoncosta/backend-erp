@@ -5,11 +5,11 @@ import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard'
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
 import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { CheckInUseCase } from '../../application/use-cases/check-in/check-in.use-case';
 import { CheckOutUseCase } from '../../application/use-cases/check-out/check-out.use-case';
 import { CheckInDto } from '../../application/use-cases/check-in/check-in.dto';
 import { CheckOutDto } from '../../application/use-cases/check-out/check-out.dto';
+import { FieldExecutionService } from '../../application/services/field-execution.service';
 
 @ApiTags('Field Execution')
 @ApiBearerAuth()
@@ -19,17 +19,13 @@ export class FieldExecutionController {
   constructor(
     private readonly checkInUseCase: CheckInUseCase,
     private readonly checkOutUseCase: CheckOutUseCase,
-    private readonly prisma: PrismaService,
+    private readonly fieldExecutionService: FieldExecutionService,
   ) {}
 
   @Post('check-in')
   @ApiOperation({ summary: 'Check in to a service order' })
   @Permissions('field-execution', 'create')
-  checkIn(
-    @Body() dto: CheckInDto,
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+  checkIn(@Body() dto: CheckInDto, @CurrentTenant() tenantId: string, @CurrentUser() user: AuthenticatedUser) {
     return this.checkInUseCase.execute(dto, tenantId, user.id);
   }
 
@@ -56,30 +52,14 @@ export class FieldExecutionController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.fieldExecution.findMany({
-      where: {
-        tenantId,
-        ...(userId && { userId }),
-        ...(serviceOrderId && { serviceOrderId }),
-        ...(status && { status }),
-      },
-      orderBy: { checkInAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.fieldExecutionService.list(tenantId, userId, serviceOrderId, status, page, limit);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get field execution by ID' })
   @Permissions('field-execution', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.fieldExecution.findFirst({
-      where: { id, tenantId },
-      include: {
-        checklists: true,
-        evidences: true,
-      },
-    });
+    return this.fieldExecutionService.findOne(id, tenantId);
   }
 
   @Post(':id/evidences')
@@ -88,16 +68,8 @@ export class FieldExecutionController {
   addEvidence(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { type: string; url: string; description?: string },
-    @CurrentTenant() _tenantId: string,
   ) {
-    return this.prisma.fieldEvidence.create({
-      data: {
-        executionId: id,
-        type: body.type,
-        url: body.url,
-        description: body.description,
-      },
-    });
+    return this.fieldExecutionService.addEvidence(id, body);
   }
 
   @Post(':id/checklists')
@@ -106,16 +78,7 @@ export class FieldExecutionController {
   saveChecklist(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { question: string; passed?: boolean; notes?: string; order?: number },
-    @CurrentTenant() _tenantId: string,
   ) {
-    return this.prisma.fieldChecklist.create({
-      data: {
-        executionId: id,
-        question: body.question,
-        passed: body.passed,
-        notes: body.notes,
-        order: body.order ?? 0,
-      },
-    });
+    return this.fieldExecutionService.saveChecklist(id, body);
   }
 }

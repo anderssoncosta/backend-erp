@@ -8,6 +8,7 @@ import { RegisterExpenseUseCase } from './application/use-cases/register-expense
 import { ApproveExpenseUseCase } from './application/use-cases/approve-expense/approve-expense.use-case';
 import { RejectExpenseUseCase } from './application/use-cases/reject-expense/reject-expense.use-case';
 import { CreateCostCenterUseCase } from './application/use-cases/create-cost-center/create-cost-center.use-case';
+import { FinancialService } from './application/services/financial.service';
 import { FinancialController } from './presentation/controllers/financial.controller';
 
 @Module({
@@ -21,6 +22,7 @@ import { FinancialController } from './presentation/controllers/financial.contro
     ApproveExpenseUseCase,
     RejectExpenseUseCase,
     CreateCostCenterUseCase,
+    FinancialService,
   ],
 })
 export class FinancialModule {}

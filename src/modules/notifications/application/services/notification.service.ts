@@ -49,4 +49,36 @@ export class NotificationService {
   async getUnreadCount(tenantId: string, userId: string): Promise<number> {
     return this.prisma.notification.count({ where: { tenantId, userId, isRead: false } });
   }
+
+  list(tenantId: string, userId: string, isRead?: string, type?: string, page: number = 1, limit: number = 20) {
+    return this.prisma.notification.findMany({
+      where: {
+        tenantId,
+        userId,
+        ...(isRead !== undefined && { isRead: isRead === 'true' }),
+        ...(type && { type }),
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+  }
+
+  markRead(id: string, userId: string) {
+    return this.prisma.notification.updateMany({
+      where: { id, userId },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
+
+  markAllRead(tenantId: string, userId: string) {
+    return this.prisma.notification.updateMany({
+      where: { tenantId, userId, isRead: false },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
+
+  remove(id: string, userId: string) {
+    return this.prisma.notification.deleteMany({ where: { id, userId } });
+  }
 }

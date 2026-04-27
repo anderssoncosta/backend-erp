@@ -16,7 +16,7 @@ async function bootstrap() {
   app.useLogger(logger);
 
   const config = app.get(ConfigService);
-  const port = config.get<number>('port', 3000);
+  const port = config.get<number>('port', 8000);
   const nodeEnv = config.get<string>('nodeEnv', 'development');
 
   // Global prefix and versioning

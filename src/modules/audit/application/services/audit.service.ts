@@ -22,6 +22,64 @@ export interface AuditParams {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
+  list(
+    tenantId: string,
+    module?: string,
+    action?: string,
+    entityType?: string,
+    entityId?: string,
+    userId?: string,
+    severity?: string,
+    from?: string,
+    to?: string,
+    page: number = 1,
+    limit: number = 50,
+  ) {
+    const dateFilter = { ...(from && { gte: new Date(from) }), ...(to && { lte: new Date(to) }) };
+    const createdAt = Object.keys(dateFilter).length ? dateFilter : undefined;
+
+    return this.prisma.auditLog.findMany({
+      where: {
+        tenantId,
+        ...(module && { module }),
+        ...(action && { action }),
+        ...(entityType && { entityType }),
+        ...(entityId && { entityId }),
+        ...(userId && { userId }),
+        ...(severity && { severity }),
+        ...(createdAt && { createdAt }),
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+  }
+
+  findOne(id: string, tenantId: string) {
+    return this.prisma.auditLog.findFirst({ where: { id, tenantId } });
+  }
+
+  async stats(tenantId: string, from?: string, to?: string) {
+    const dateFilter = { ...(from && { gte: new Date(from) }), ...(to && { lte: new Date(to) }) };
+    const createdAt = Object.keys(dateFilter).length ? dateFilter : undefined;
+
+    const [byModule, bySeverity, total] = await Promise.all([
+      this.prisma.auditLog.groupBy({
+        by: ['module'],
+        where: { tenantId, ...(createdAt && { createdAt }) },
+        _count: { id: true },
+      }),
+      this.prisma.auditLog.groupBy({
+        by: ['severity'],
+        where: { tenantId, ...(createdAt && { createdAt }) },
+        _count: { id: true },
+      }),
+      this.prisma.auditLog.count({ where: { tenantId, ...(createdAt && { createdAt }) } }),
+    ]);
+
+    return { total, byModule, bySeverity };
+  }
+
   async log(params: AuditParams): Promise<void> {
     await this.prisma.auditLog.create({
       data: {

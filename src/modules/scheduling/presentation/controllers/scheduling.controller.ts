@@ -5,9 +5,9 @@ import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard'
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
 import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { CreateScheduleUseCase } from '../../application/use-cases/create-schedule/create-schedule.use-case';
 import { CreateScheduleDto } from '../../application/use-cases/create-schedule/create-schedule.dto';
+import { SchedulingService } from '../../application/services/scheduling.service';
 
 @ApiTags('Scheduling')
 @ApiBearerAuth()
@@ -16,7 +16,7 @@ import { CreateScheduleDto } from '../../application/use-cases/create-schedule/c
 export class SchedulingController {
   constructor(
     private readonly createScheduleUseCase: CreateScheduleUseCase,
-    private readonly prisma: PrismaService,
+    private readonly schedulingService: SchedulingService,
   ) {}
 
   @Post()
@@ -42,30 +42,14 @@ export class SchedulingController {
     @Query('page') page = 1,
     @Query('limit') limit = 50,
   ) {
-    const dateFilter = {
-      ...(from && { gte: new Date(from) }),
-      ...(to && { lte: new Date(to) }),
-    };
-    const scheduledDate = Object.keys(dateFilter).length ? dateFilter : undefined;
-
-    return this.prisma.schedule.findMany({
-      where: {
-        tenantId,
-        ...(userId && { userId }),
-        ...(status && { status }),
-        ...(scheduledDate && { scheduledDate }),
-      },
-      orderBy: { scheduledDate: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.schedulingService.list(tenantId, userId, from, to, status, page, limit);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get schedule by ID' })
   @Permissions('scheduling', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.schedule.findFirst({ where: { id, tenantId } });
+    return this.schedulingService.findOne(id, tenantId);
   }
 
   @Patch(':id/cancel')
@@ -76,9 +60,6 @@ export class SchedulingController {
     @Body() body: { reason?: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.schedule.updateMany({
-      where: { id, tenantId },
-      data: { status: 'CANCELLED', cancelReason: body.reason },
-    });
+    return this.schedulingService.cancel(id, tenantId, body.reason);
   }
 }

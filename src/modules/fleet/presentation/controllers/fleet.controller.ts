@@ -4,14 +4,14 @@ import { JwtAuthGuard } from '@shared/presentation/guards/jwt-auth.guard';
 import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard';
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { FleetService } from '../../application/services/fleet.service';
 
 @ApiTags('Fleet')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller({ path: 'fleet', version: '1' })
 export class FleetController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly fleetService: FleetService) {}
 
   // ─── Vehicles ──────────────────────────────────────────────────────────────
 
@@ -26,24 +26,7 @@ export class FleetController {
     },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.vehicle.create({
-      data: {
-        tenantId,
-        plate: body.plate,
-        model: body.model,
-        brand: body.brand,
-        year: body.year,
-        type: body.type,
-        color: body.color,
-        renavam: body.renavam,
-        chassis: body.chassis,
-        fuelType: body.fuelType,
-        branchId: body.branchId,
-        assignedToId: body.assignedToId,
-        status: 'AVAILABLE',
-        isActive: true,
-      },
-    });
+    return this.fleetService.createVehicle(tenantId, body);
   }
 
   @Get('vehicles')
@@ -56,27 +39,14 @@ export class FleetController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.vehicle.findMany({
-      where: {
-        tenantId,
-        isActive: true,
-        ...(status && { status }),
-        ...(branchId && { branchId }),
-      },
-      orderBy: { plate: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.fleetService.listVehicles(tenantId, status, branchId, page, limit);
   }
 
   @Get('vehicles/:id')
   @ApiOperation({ summary: 'Get vehicle by ID' })
   @Permissions('fleet', 'read')
   getVehicle(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.vehicle.findFirst({
-      where: { id, tenantId },
-      include: { maintenances: { orderBy: { performedAt: 'desc' }, take: 5 } },
-    });
+    return this.fleetService.getVehicle(id, tenantId);
   }
 
   @Patch('vehicles/:id/status')
@@ -87,13 +57,7 @@ export class FleetController {
     @Body() body: { status: string; assignedToId?: string | null },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.vehicle.updateMany({
-      where: { id, tenantId },
-      data: {
-        status: body.status,
-        ...(body.assignedToId !== undefined && { assignedToId: body.assignedToId }),
-      },
-    });
+    return this.fleetService.updateStatus(id, tenantId, body.status, body.assignedToId);
   }
 
   // ─── Maintenance ───────────────────────────────────────────────────────────
@@ -110,21 +74,7 @@ export class FleetController {
     },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.vehicleMaintenance.create({
-      data: {
-        tenantId,
-        vehicleId,
-        type: body.type,
-        description: body.description,
-        performedAt: body.performedAt ? new Date(body.performedAt) : new Date(),
-        cost: body.cost,
-        mileage: body.mileage,
-        nextAt: body.nextAt ? new Date(body.nextAt) : undefined,
-        performedById: body.performedById,
-        workshopName: body.workshopName,
-        notes: body.notes,
-      },
-    });
+    return this.fleetService.registerMaintenance(vehicleId, tenantId, body);
   }
 
   @Get('maintenance')
@@ -136,15 +86,6 @@ export class FleetController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.vehicleMaintenance.findMany({
-      where: {
-        tenantId,
-        ...(vehicleId && { vehicleId }),
-      },
-      include: { vehicle: { select: { id: true, plate: true, model: true } } },
-      orderBy: { performedAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.fleetService.listMaintenance(tenantId, vehicleId, page, limit);
   }
 }

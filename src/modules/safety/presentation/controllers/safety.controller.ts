@@ -5,14 +5,14 @@ import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard'
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
 import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { SafetyService } from '../../application/services/safety.service';
 
 @ApiTags('Safety')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller({ path: 'safety', version: '1' })
 export class SafetyController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly safetyService: SafetyService) {}
 
   // ─── Safety Documents ──────────────────────────────────────────────────────
 
@@ -20,26 +20,11 @@ export class SafetyController {
   @ApiOperation({ summary: 'Create safety document' })
   @Permissions('safety', 'create')
   createDocument(
-    @Body() body: {
-      type: string; title: string; description?: string; expiresAt?: string;
-      fileUrl?: string; userId?: string; issuedAt?: string;
-    },
+    @Body() body: { type: string; title: string; description?: string; expiresAt?: string; fileUrl?: string; userId?: string; issuedAt?: string },
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.safetyDocument.create({
-      data: {
-        tenantId,
-        type: body.type,
-        title: body.title,
-        description: body.description,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
-        issuedAt: body.issuedAt ? new Date(body.issuedAt) : undefined,
-        fileUrl: body.fileUrl,
-        userId: body.userId ?? user.id,
-        status: 'VALID',
-      },
-    });
+    return this.safetyService.createDocument(tenantId, user.id, body);
   }
 
   @Get('documents')
@@ -53,17 +38,7 @@ export class SafetyController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.safetyDocument.findMany({
-      where: {
-        tenantId,
-        ...(type && { type }),
-        ...(userId && { userId }),
-        ...(status && { status }),
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.safetyService.listDocuments(tenantId, type, userId, status, page, limit);
   }
 
   // ─── PPE Deliveries ────────────────────────────────────────────────────────
@@ -76,17 +51,7 @@ export class SafetyController {
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.pPEDelivery.create({
-      data: {
-        tenantId,
-        userId: body.userId,
-        receivedById: user.id,
-        item: body.item,
-        quantity: body.quantity,
-        deliveredAt: new Date(),
-        notes: body.notes,
-      },
-    });
+    return this.safetyService.registerPPE(tenantId, user.id, body);
   }
 
   @Get('ppe-deliveries')
@@ -98,12 +63,7 @@ export class SafetyController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.pPEDelivery.findMany({
-      where: { tenantId, ...(userId && { userId }) },
-      orderBy: { deliveredAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.safetyService.listPPE(tenantId, userId, page, limit);
   }
 
   // ─── Incidents ─────────────────────────────────────────────────────────────
@@ -112,26 +72,11 @@ export class SafetyController {
   @ApiOperation({ summary: 'Report incident' })
   @Permissions('safety', 'create')
   reportIncident(
-    @Body() body: {
-      type: string; severity?: string; description: string;
-      occurredAt?: string; location?: string; injuries?: boolean;
-    },
+    @Body() body: { type: string; severity?: string; description: string; occurredAt?: string; location?: string; injuries?: boolean },
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.incident.create({
-      data: {
-        tenantId,
-        reportedById: user.id,
-        type: body.type,
-        severity: body.severity ?? 'MEDIUM',
-        description: body.description,
-        occurredAt: body.occurredAt ? new Date(body.occurredAt) : new Date(),
-        location: body.location,
-        injuries: body.injuries ?? false,
-        status: 'OPEN',
-      },
-    });
+    return this.safetyService.reportIncident(tenantId, user.id, body);
   }
 
   @Get('incidents')
@@ -145,17 +90,7 @@ export class SafetyController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.incident.findMany({
-      where: {
-        tenantId,
-        ...(type && { type }),
-        ...(severity && { severity }),
-        ...(status && { status }),
-      },
-      orderBy: { occurredAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.safetyService.listIncidents(tenantId, type, severity, status, page, limit);
   }
 
   @Patch('incidents/:id/close')
@@ -166,13 +101,6 @@ export class SafetyController {
     @Body() body: { correctiveAction: string; resolvedAt?: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.incident.updateMany({
-      where: { id, tenantId },
-      data: {
-        status: 'CLOSED',
-        correctiveAction: body.correctiveAction,
-        resolvedAt: body.resolvedAt ? new Date(body.resolvedAt) : new Date(),
-      },
-    });
+    return this.safetyService.closeIncident(id, tenantId, body.correctiveAction, body.resolvedAt);
   }
 }

@@ -4,14 +4,14 @@ import { JwtAuthGuard } from '@shared/presentation/guards/jwt-auth.guard';
 import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard';
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { AssetsService } from '../../application/services/assets.service';
 
 @ApiTags('Assets')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller({ path: 'assets', version: '1' })
 export class AssetsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly assetsService: AssetsService) {}
 
   @Post()
   @ApiOperation({ summary: 'Register asset' })
@@ -24,23 +24,7 @@ export class AssetsController {
     },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.asset.create({
-      data: {
-        tenantId,
-        code: body.code,
-        name: body.name,
-        type: body.type,
-        category: body.category,
-        brand: body.brand,
-        model: body.model,
-        serialNumber: body.serialNumber,
-        installDate: body.installDate ? new Date(body.installDate) : undefined,
-        warrantyUntil: body.warrantyUntil ? new Date(body.warrantyUntil) : undefined,
-        branchId: body.branchId,
-        location: body.location,
-        status: 'ACTIVE',
-      },
-    });
+    return this.assetsService.create(tenantId, body);
   }
 
   @Get()
@@ -55,35 +39,14 @@ export class AssetsController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.asset.findMany({
-      where: {
-        tenantId,
-        deletedAt: null,
-        ...(status && { status }),
-        ...(category && { category }),
-        ...(branchId && { branchId }),
-        ...(search && {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { code: { contains: search, mode: 'insensitive' } },
-            { serialNumber: { contains: search, mode: 'insensitive' } },
-          ],
-        }),
-      },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.assetsService.list(tenantId, status, category, branchId, search, page, limit);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get asset by ID' })
   @Permissions('assets', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.asset.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: { history: { orderBy: { performedAt: 'desc' }, take: 10 } },
-    });
+    return this.assetsService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -94,16 +57,7 @@ export class AssetsController {
     @Body() body: { status?: string; location?: string; branchId?: string; warrantyUntil?: string; notes?: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.asset.updateMany({
-      where: { id, tenantId },
-      data: {
-        ...(body.status && { status: body.status }),
-        ...(body.location !== undefined && { location: body.location }),
-        ...(body.branchId !== undefined && { branchId: body.branchId }),
-        ...(body.warrantyUntil && { warrantyUntil: new Date(body.warrantyUntil) }),
-        ...(body.notes !== undefined && { notes: body.notes }),
-      },
-    });
+    return this.assetsService.update(id, tenantId, body);
   }
 
   @Post(':id/history')
@@ -114,16 +68,6 @@ export class AssetsController {
     @Body() body: { type: string; description: string; performedAt?: string; performedById?: string; cost?: number },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.assetHistory.create({
-      data: {
-        tenantId,
-        assetId,
-        type: body.type,
-        description: body.description,
-        performedAt: body.performedAt ? new Date(body.performedAt) : new Date(),
-        performedById: body.performedById,
-        cost: body.cost,
-      },
-    });
+    return this.assetsService.addHistory(assetId, tenantId, body);
   }
 }

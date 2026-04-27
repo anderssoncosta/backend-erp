@@ -1,6 +1,16 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseUUIDPipe,
-  Patch, Post, Query, UseGuards,
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@shared/presentation/guards/jwt-auth.guard';
@@ -10,7 +20,7 @@ import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.de
 import { CreateBranchUseCase } from '../../application/use-cases/create-branch/create-branch.use-case';
 import { ListBranchesUseCase } from '../../application/use-cases/list-branches/list-branches.use-case';
 import { CreateBranchDto } from '../../application/use-cases/create-branch/create-branch.dto';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { BranchesService } from '../../application/services/branches.service';
 
 @ApiTags('Branches')
 @ApiBearerAuth()
@@ -20,7 +30,7 @@ export class BranchesController {
   constructor(
     private readonly createUC: CreateBranchUseCase,
     private readonly listUC: ListBranchesUseCase,
-    private readonly prisma: PrismaService,
+    private readonly branchesService: BranchesService,
   ) {}
 
   @Post()
@@ -35,8 +45,8 @@ export class BranchesController {
   @Permissions('tenants', 'read')
   findAll(
     @CurrentTenant() tenantId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
     return this.listUC.execute(tenantId, page, limit);
   }
@@ -45,7 +55,7 @@ export class BranchesController {
   @ApiOperation({ summary: 'Get branch by ID' })
   @Permissions('tenants', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.branch.findFirst({ where: { id, tenantId, deletedAt: null } });
+    return this.branchesService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -54,16 +64,14 @@ export class BranchesController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() data: Partial<CreateBranchDto>,
-    @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.branch.update({ where: { id }, data });
+    return this.branchesService.update(id, data);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Soft delete branch' })
   @Permissions('tenants', 'delete')
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.prisma.branch.update({ where: { id }, data: { deletedAt: new Date() } });
-    return { message: 'Branch deleted' };
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.branchesService.remove(id);
   }
 }

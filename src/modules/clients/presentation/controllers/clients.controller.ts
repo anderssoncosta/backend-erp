@@ -4,13 +4,13 @@ import { JwtAuthGuard } from '@shared/presentation/guards/jwt-auth.guard';
 import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard';
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { CreateClientUseCase } from '../../application/use-cases/create-client/create-client.use-case';
 import { UpdateClientUseCase } from '../../application/use-cases/update-client/update-client.use-case';
 import { CreateClientDto } from '../../application/use-cases/create-client/create-client.dto';
 import { UpdateClientDto } from '../../application/use-cases/update-client/update-client.dto';
 import { AddContactDto } from '../../application/use-cases/add-contact/add-contact.dto';
 import { AddAddressDto } from '../../application/use-cases/add-address/add-address.dto';
+import { ClientsService } from '../../application/services/clients.service';
 
 @ApiTags('Clients')
 @ApiBearerAuth()
@@ -20,7 +20,7 @@ export class ClientsController {
   constructor(
     private readonly createClientUseCase: CreateClientUseCase,
     private readonly updateClientUseCase: UpdateClientUseCase,
-    private readonly prisma: PrismaService,
+    private readonly clientsService: ClientsService,
   ) {}
 
   @Post()
@@ -41,27 +41,14 @@ export class ClientsController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.client.findMany({
-      where: {
-        tenantId, deletedAt: null,
-        ...(status && { status }),
-        ...(type && { type }),
-        ...(search && { OR: [{ name: { contains: search, mode: 'insensitive' } }, { document: { contains: search } }, { email: { contains: search, mode: 'insensitive' } }] }),
-      },
-      include: { contacts: { where: { isPrimary: true } }, _count: { select: { contracts: true, serviceOrders: true } } },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * limit, take: limit,
-    });
+    return this.clientsService.list(tenantId, search, status, type, page, limit);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get client by ID' })
   @Permissions('clients', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.client.findFirst({
-      where: { id, tenantId, deletedAt: null },
-      include: { contacts: true, addresses: true, contracts: { where: { deletedAt: null } }, _count: { select: { serviceOrders: true } } },
-    });
+    return this.clientsService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -74,49 +61,49 @@ export class ClientsController {
   @Patch(':id/activate')
   @ApiOperation({ summary: 'Activate client' })
   @Permissions('clients', 'update')
-  activate(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.client.update({ where: { id }, data: { status: 'ACTIVE' } });
+  activate(@Param('id', ParseUUIDPipe) id: string) {
+    return this.clientsService.activate(id);
   }
 
   @Patch(':id/deactivate')
   @ApiOperation({ summary: 'Deactivate client' })
   @Permissions('clients', 'update')
-  deactivate(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.client.update({ where: { id }, data: { status: 'INACTIVE' } });
+  deactivate(@Param('id', ParseUUIDPipe) id: string) {
+    return this.clientsService.deactivate(id);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete client (soft)' })
   @Permissions('clients', 'delete')
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.client.update({ where: { id }, data: { deletedAt: new Date() } });
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.clientsService.remove(id);
   }
 
   @Post(':id/contacts')
   @ApiOperation({ summary: 'Add contact to client' })
   @Permissions('clients', 'update')
-  addContact(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddContactDto, @CurrentTenant() tenantId: string) {
-    return this.prisma.clientContact.create({ data: { ...dto, clientId: id } });
+  addContact(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddContactDto) {
+    return this.clientsService.addContact(id, dto);
   }
 
   @Delete(':id/contacts/:contactId')
   @ApiOperation({ summary: 'Remove contact from client' })
   @Permissions('clients', 'update')
   removeContact(@Param('contactId', ParseUUIDPipe) contactId: string) {
-    return this.prisma.clientContact.delete({ where: { id: contactId } });
+    return this.clientsService.removeContact(contactId);
   }
 
   @Post(':id/addresses')
   @ApiOperation({ summary: 'Add address to client' })
   @Permissions('clients', 'update')
   addAddress(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddAddressDto) {
-    return this.prisma.clientAddress.create({ data: { ...dto, clientId: id } });
+    return this.clientsService.addAddress(id, dto);
   }
 
   @Delete(':id/addresses/:addressId')
   @ApiOperation({ summary: 'Remove address from client' })
   @Permissions('clients', 'update')
   removeAddress(@Param('addressId', ParseUUIDPipe) addressId: string) {
-    return this.prisma.clientAddress.delete({ where: { id: addressId } });
+    return this.clientsService.removeAddress(addressId);
   }
 }

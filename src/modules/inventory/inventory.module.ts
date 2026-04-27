@@ -5,6 +5,7 @@ import { LowStockMonitorProcessor } from './infrastructure/jobs/low-stock-monito
 import { RegisterEntryUseCase } from './application/use-cases/register-entry/register-entry.use-case';
 import { RegisterExitUseCase } from './application/use-cases/register-exit/register-exit.use-case';
 import { TransferStockUseCase } from './application/use-cases/transfer-stock/transfer-stock.use-case';
+import { InventoryService } from './application/services/inventory.service';
 import { InventoryController } from './presentation/controllers/inventory.controller';
 
 @Module({
@@ -15,6 +16,7 @@ import { InventoryController } from './presentation/controllers/inventory.contro
     RegisterExitUseCase,
     TransferStockUseCase,
     LowStockMonitorProcessor,
+    InventoryService,
   ],
   exports: [RegisterEntryUseCase, RegisterExitUseCase, TransferStockUseCase],
 })

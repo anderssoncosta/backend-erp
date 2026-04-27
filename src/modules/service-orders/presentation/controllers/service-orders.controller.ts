@@ -40,8 +40,7 @@ import { AssignServiceOrderDto } from '../../application/use-cases/assign-servic
 import { ChangeStatusDto } from '../../application/use-cases/change-status/change-status.dto';
 import { CancelServiceOrderDto } from '../../application/use-cases/cancel-service-order/cancel-service-order.dto';
 import { AddCommentDto } from '../../application/use-cases/add-comment/add-comment.dto';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
-import { S3Service } from '@infrastructure/storage/s3.service';
+import { ServiceOrdersService } from '../../application/services/service-orders.service';
 
 @ApiTags('Service Orders')
 @ApiBearerAuth()
@@ -58,8 +57,7 @@ export class ServiceOrdersController {
     private readonly cancelUC: CancelServiceOrderUseCase,
     private readonly reopenUC: ReopenServiceOrderUseCase,
     private readonly addCommentUC: AddCommentUseCase,
-    private readonly prisma: PrismaService,
-    private readonly s3: S3Service,
+    private readonly serviceOrdersService: ServiceOrdersService,
   ) {}
 
   @Post()
@@ -76,20 +74,14 @@ export class ServiceOrdersController {
   @Get()
   @ApiOperation({ summary: 'List service orders' })
   @Permissions('service-orders', 'read')
-  findAll(
-    @Query() query: ListServiceOrdersQueryDto,
-    @CurrentTenant() tenantId: string,
-  ) {
+  findAll(@Query() query: ListServiceOrdersQueryDto, @CurrentTenant() tenantId: string) {
     return this.listUC.execute(query, tenantId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get service order by ID' })
   @Permissions('service-orders', 'read')
-  findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentTenant() tenantId: string,
-  ) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
     return this.getUC.execute(id, tenantId);
   }
 
@@ -107,15 +99,8 @@ export class ServiceOrdersController {
   @Delete(':id')
   @ApiOperation({ summary: 'Soft delete service order' })
   @Permissions('service-orders', 'delete')
-  async remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentTenant() tenantId: string,
-  ) {
-    await this.prisma.serviceOrder.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
-    return { message: 'Service order deleted' };
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.serviceOrdersService.remove(id);
   }
 
   @Post(':id/assign')
@@ -182,30 +167,16 @@ export class ServiceOrdersController {
   @Permissions('service-orders', 'read')
   getComments(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.prisma.serviceOrderComment.findMany({
-      where: {
-        serviceOrderId: id,
-        deletedAt: null,
-        OR: [
-          { isInternal: false },
-          { isInternal: true, authorId: user.id },
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    return this.serviceOrdersService.getComments(id, user.id);
   }
 
   @Get(':id/history')
   @ApiOperation({ summary: 'Get service order history' })
   @Permissions('service-orders', 'read')
   getHistory(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prisma.serviceOrderHistory.findMany({
-      where: { serviceOrderId: id },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.serviceOrdersService.getHistory(id);
   }
 
   @Post(':id/attachments')
@@ -213,44 +184,19 @@ export class ServiceOrdersController {
   @ApiConsumes('multipart/form-data')
   @Permissions('service-orders', 'update')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadAttachment(
+  uploadAttachment(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const result = await this.s3.upload(file, tenantId, {
-      folder: `service-orders/${id}`,
-    });
-
-    return this.prisma.serviceOrderAttachment.create({
-      data: {
-        serviceOrderId: id,
-        uploadedById: user.id,
-        fileName: result.key.split('/').pop() ?? file.originalname,
-        originalName: file.originalname,
-        mimeType: result.mimeType,
-        size: result.size,
-        s3Key: result.key,
-        s3Bucket: result.bucket,
-      },
-    });
+    return this.serviceOrdersService.uploadAttachment(id, file, tenantId, user.id);
   }
 
   @Get(':id/attachments')
   @ApiOperation({ summary: 'List service order attachments' })
   @Permissions('service-orders', 'read')
-  async getAttachments(@Param('id', ParseUUIDPipe) id: string) {
-    const attachments = await this.prisma.serviceOrderAttachment.findMany({
-      where: { serviceOrderId: id },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return Promise.all(
-      attachments.map(async (a) => ({
-        ...a,
-        url: await this.s3.getPresignedUrl(a.s3Bucket, a.s3Key),
-      })),
-    );
+  getAttachments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.serviceOrdersService.getAttachments(id);
   }
 }

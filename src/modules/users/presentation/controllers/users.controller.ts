@@ -12,12 +12,7 @@ import { ListUsersUseCase } from '../../application/use-cases/list-users/list-us
 import { CreateUserDto } from '../../application/use-cases/create-user/create-user.dto';
 import { ListUsersQueryDto } from '../../application/use-cases/list-users/list-users.query.dto';
 import { UpdateUserDto } from '../../application/use-cases/update-user/update-user.dto';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
-
-const USER_SELECT = {
-  id: true, tenantId: true, branchId: true, name: true, email: true,
-  phone: true, role: true, status: true, avatarUrl: true, lastLoginAt: true, createdAt: true,
-};
+import { UsersService } from '../../application/services/users.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -27,7 +22,7 @@ export class UsersController {
   constructor(
     private readonly createUC: CreateUserUseCase,
     private readonly listUC: ListUsersUseCase,
-    private readonly prisma: PrismaService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Post()
@@ -48,7 +43,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Get user by ID' })
   @Permissions('users', 'read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.user.findFirst({ where: { id, tenantId, deletedAt: null }, select: USER_SELECT });
+    return this.usersService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -57,47 +52,31 @@ export class UsersController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
-    @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.user.update({
-      where: { id },
-      data: { ...dto, updatedAt: new Date() },
-      select: USER_SELECT,
-    });
+    return this.usersService.update(id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Deactivate user' })
   @Permissions('users', 'delete')
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.prisma.user.update({
-      where: { id },
-      data: { status: 'INACTIVE', deletedAt: new Date() },
-    });
-    return { message: 'User deactivated' };
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.remove(id);
   }
 
   @Get(':id/permissions')
   @ApiOperation({ summary: 'List user permissions' })
   @Permissions('users', 'read')
   getPermissions(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prisma.userPermission.findMany({
-      where: { userId: id, isRevoked: false },
-      include: { permission: true },
-    });
+    return this.usersService.getPermissions(id);
   }
 
   @Post(':id/permissions')
   @ApiOperation({ summary: 'Assign permissions to user' })
   @Permissions('users', 'update')
-  async assignPermissions(
+  assignPermissions(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { permissionIds: string[]; grantedById: string },
   ) {
-    const data = body.permissionIds.map((permissionId) => ({
-      userId: id, permissionId, grantedById: body.grantedById,
-    }));
-
-    return this.prisma.userPermission.createMany({ data, skipDuplicates: true });
+    return this.usersService.assignPermissions(id, body.permissionIds, body.grantedById);
   }
 }

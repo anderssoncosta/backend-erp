@@ -4,15 +4,14 @@ import { JwtAuthGuard } from '@shared/presentation/guards/jwt-auth.guard';
 import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard';
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
-import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { PublicLightingService } from '../../application/services/public-lighting.service';
 
 @ApiTags('Public Lighting')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller({ path: 'public-lighting', version: '1' })
 export class PublicLightingController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly publicLightingService: PublicLightingService) {}
 
   // ─── Lighting Points ───────────────────────────────────────────────────────
 
@@ -27,23 +26,7 @@ export class PublicLightingController {
     },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.lightingPoint.create({
-      data: {
-        tenantId,
-        code: body.code,
-        address: body.address,
-        city: body.city,
-        neighborhood: body.neighborhood,
-        state: body.state ?? 'SP',
-        latitude: body.latitude,
-        longitude: body.longitude,
-        type: body.type ?? 'POLE',
-        lampType: body.lampType,
-        power: body.power,
-        branchId: body.branchId,
-        status: 'ACTIVE',
-      },
-    });
+    return this.publicLightingService.createPoint(tenantId, body);
   }
 
   @Get('points')
@@ -57,22 +40,7 @@ export class PublicLightingController {
     @Query('page') page = 1,
     @Query('limit') limit = 50,
   ) {
-    return this.prisma.lightingPoint.findMany({
-      where: {
-        tenantId,
-        ...(status && { status }),
-        ...(lampType && { lampType }),
-        ...(search && {
-          OR: [
-            { code: { contains: search, mode: 'insensitive' } },
-            { address: { contains: search, mode: 'insensitive' } },
-          ],
-        }),
-      },
-      orderBy: { code: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.publicLightingService.listPoints(tenantId, status, lampType, search, page, limit);
   }
 
   @Patch('points/:id/status')
@@ -83,10 +51,7 @@ export class PublicLightingController {
     @Body() body: { status: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.lightingPoint.updateMany({
-      where: { id, tenantId },
-      data: { status: body.status },
-    });
+    return this.publicLightingService.updatePointStatus(id, tenantId, body.status);
   }
 
   // ─── Lighting Orders ───────────────────────────────────────────────────────
@@ -100,20 +65,8 @@ export class PublicLightingController {
       priority?: string; scheduledAt?: string; technicianId?: string;
     },
     @CurrentTenant() tenantId: string,
-    @CurrentUser() _user: AuthenticatedUser,
   ) {
-    return this.prisma.lightingOrder.create({
-      data: {
-        tenantId,
-        lightingPointId: body.lightingPointId,
-        type: body.type,
-        description: body.description,
-        priority: body.priority ?? 'MEDIUM',
-        scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
-        technicianId: body.technicianId,
-        status: 'PENDING',
-      },
-    });
+    return this.publicLightingService.createOrder(tenantId, body);
   }
 
   @Get('orders')
@@ -127,18 +80,7 @@ export class PublicLightingController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.lightingOrder.findMany({
-      where: {
-        tenantId,
-        ...(status && { status }),
-        ...(type && { type }),
-        ...(technicianId && { technicianId }),
-      },
-      include: { lightingPoint: { select: { id: true, code: true, address: true } } },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.publicLightingService.listOrders(tenantId, status, type, technicianId, page, limit);
   }
 
   @Patch('orders/:id/complete')
@@ -149,13 +91,6 @@ export class PublicLightingController {
     @Body() body: { notes?: string; completedAt?: string },
     @CurrentTenant() tenantId: string,
   ) {
-    return this.prisma.lightingOrder.updateMany({
-      where: { id, tenantId },
-      data: {
-        status: 'COMPLETED',
-        completedAt: body.completedAt ? new Date(body.completedAt) : new Date(),
-        notes: body.notes,
-      },
-    });
+    return this.publicLightingService.completeOrder(id, tenantId, body.notes, body.completedAt);
   }
 }

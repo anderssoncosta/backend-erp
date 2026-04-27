@@ -16,6 +16,7 @@ import { AddCommentUseCase } from './application/use-cases/add-comment/add-comme
 import { OnServiceOrderCreatedHandler } from './application/event-handlers/on-service-order-created.handler';
 import { OnServiceOrderStatusChangedHandler } from './application/event-handlers/on-service-order-status-changed.handler';
 import { SlaMonitorProcessor } from './infrastructure/jobs/sla-monitor.processor';
+import { ServiceOrdersService } from './application/services/service-orders.service';
 import { ServiceOrdersController } from './presentation/controllers/service-orders.controller';
 import { ServiceOrdersGateway } from './presentation/gateways/service-orders.gateway';
 
@@ -43,6 +44,7 @@ import { ServiceOrdersGateway } from './presentation/gateways/service-orders.gat
     OnServiceOrderCreatedHandler,
     OnServiceOrderStatusChangedHandler,
     SlaMonitorProcessor,
+    ServiceOrdersService,
     ServiceOrdersGateway,
   ],
   exports: [GetServiceOrderUseCase, SERVICE_ORDER_REPOSITORY],

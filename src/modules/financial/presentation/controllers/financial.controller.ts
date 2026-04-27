@@ -7,7 +7,6 @@ import { PermissionsGuard } from '@shared/presentation/guards/permissions.guard'
 import { Permissions } from '@shared/presentation/decorators/permissions.decorator';
 import { CurrentTenant } from '@shared/presentation/decorators/current-tenant.decorator';
 import { CurrentUser, AuthenticatedUser } from '@shared/presentation/decorators/current-user.decorator';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { IssueInvoiceUseCase } from '../../application/use-cases/issue-invoice/issue-invoice.use-case';
 import { IssueInvoiceDto } from '../../application/use-cases/issue-invoice/issue-invoice.dto';
 import { RegisterPaymentUseCase } from '../../application/use-cases/register-payment/register-payment.use-case';
@@ -19,6 +18,7 @@ import { RejectExpenseUseCase } from '../../application/use-cases/reject-expense
 import { RejectExpenseDto } from '../../application/use-cases/reject-expense/reject-expense.dto';
 import { CreateCostCenterUseCase } from '../../application/use-cases/create-cost-center/create-cost-center.use-case';
 import { CreateCostCenterDto } from '../../application/use-cases/create-cost-center/create-cost-center.dto';
+import { FinancialService } from '../../application/services/financial.service';
 
 @ApiTags('Financial')
 @ApiBearerAuth()
@@ -32,7 +32,7 @@ export class FinancialController {
     private readonly approveExpenseUseCase: ApproveExpenseUseCase,
     private readonly rejectExpenseUseCase: RejectExpenseUseCase,
     private readonly createCostCenterUseCase: CreateCostCenterUseCase,
-    private readonly prisma: PrismaService,
+    private readonly financialService: FinancialService,
   ) {}
 
   // ─── Invoices ────────────────────────────────────────────────────────────
@@ -58,27 +58,14 @@ export class FinancialController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.invoice.findMany({
-      where: {
-        tenantId,
-        ...(status && { status }),
-        ...(clientId && { clientId }),
-      },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.financialService.listInvoices(tenantId, status, clientId, page, limit);
   }
 
   @Get('invoices/:id')
   @ApiOperation({ summary: 'Get invoice by ID' })
   @Permissions('financial', 'read')
   getInvoice(@Param('id', ParseUUIDPipe) id: string, @CurrentTenant() tenantId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { id, tenantId },
-      include: { items: true, payments: true },
-    });
+    return this.financialService.getInvoice(id, tenantId);
   }
 
   @Patch('invoices/:id/cancel')
@@ -86,13 +73,9 @@ export class FinancialController {
   @Permissions('financial', 'update')
   cancelInvoice(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentTenant() tenantId: string,
     @Body() body: { reason?: string },
   ) {
-    return this.prisma.invoice.update({
-      where: { id },
-      data: { status: 'CANCELLED', notes: body.reason },
-    });
+    return this.financialService.cancelInvoice(id, body.reason);
   }
 
   // ─── Payments ────────────────────────────────────────────────────────────
@@ -133,17 +116,7 @@ export class FinancialController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.prisma.expense.findMany({
-      where: {
-        tenantId,
-        ...(status && { status }),
-        ...(category && { category }),
-        ...(userId && { userId }),
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    return this.financialService.listExpenses(tenantId, status, category, userId, page, limit);
   }
 
   @Patch('expenses/:id/approve')
@@ -181,10 +154,7 @@ export class FinancialController {
   @ApiOperation({ summary: 'List cost centers' })
   @Permissions('financial', 'read')
   listCostCenters(@CurrentTenant() tenantId: string, @Query('isActive') isActive?: string) {
-    return this.prisma.costCenter.findMany({
-      where: { tenantId, ...(isActive !== undefined && { isActive: isActive === 'true' }) },
-      orderBy: { code: 'asc' },
-    });
+    return this.financialService.listCostCenters(tenantId, isActive);
   }
 
   // ─── Reports ─────────────────────────────────────────────────────────────
@@ -192,73 +162,22 @@ export class FinancialController {
   @Get('reports/summary')
   @ApiOperation({ summary: 'Financial summary' })
   @Permissions('financial', 'read')
-  async getSummary(
+  getSummary(
     @CurrentTenant() tenantId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    const dateFilter = {
-      ...(from && { gte: new Date(from) }),
-      ...(to && { lte: new Date(to) }),
-    };
-    const createdAt = Object.keys(dateFilter).length ? dateFilter : undefined;
-
-    const [invoiceTotals, expenseTotals, paidInvoices] = await Promise.all([
-      this.prisma.invoice.aggregate({
-        where: { tenantId, ...(createdAt && { createdAt }) },
-        _sum: { totalAmount: true, paidAmount: true },
-        _count: { id: true },
-      }),
-      this.prisma.expense.aggregate({
-        where: { tenantId, status: 'PAID', ...(createdAt && { createdAt }) },
-        _sum: { amount: true },
-        _count: { id: true },
-      }),
-      this.prisma.invoice.count({ where: { tenantId, status: 'PAID', ...(createdAt && { createdAt }) } }),
-    ]);
-
-    const totalRevenue = Number(invoiceTotals._sum.totalAmount ?? 0);
-    const totalReceived = Number(invoiceTotals._sum.paidAmount ?? 0);
-    const totalExpenses = Number(expenseTotals._sum.amount ?? 0);
-
-    return {
-      totalRevenue,
-      totalReceived,
-      totalPending: totalRevenue - totalReceived,
-      totalExpenses,
-      netProfit: totalReceived - totalExpenses,
-      invoiceCount: invoiceTotals._count.id,
-      paidInvoiceCount: paidInvoices,
-      expenseCount: expenseTotals._count.id,
-    };
+    return this.financialService.getSummary(tenantId, from, to);
   }
 
   @Get('reports/cash-flow')
   @ApiOperation({ summary: 'Cash flow report' })
   @Permissions('financial', 'read')
-  async getCashFlow(
+  getCashFlow(
     @CurrentTenant() tenantId: string,
     @Query('from') from: string,
     @Query('to') to: string,
   ) {
-    const [payments, expenses] = await Promise.all([
-      this.prisma.payment.findMany({
-        where: {
-          tenantId,
-          paidAt: { gte: new Date(from), lte: new Date(to) },
-        },
-        orderBy: { paidAt: 'asc' },
-      }),
-      this.prisma.expense.findMany({
-        where: {
-          tenantId,
-          status: 'PAID',
-          paidAt: { gte: new Date(from), lte: new Date(to) },
-        },
-        orderBy: { paidAt: 'asc' },
-      }),
-    ]);
-
-    return { inflows: payments, outflows: expenses };
+    return this.financialService.getCashFlow(tenantId, from, to);
   }
 }
