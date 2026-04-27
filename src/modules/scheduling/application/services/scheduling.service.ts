@@ -28,8 +28,8 @@ export class SchedulingService {
         ...(scheduledDate && { scheduledDate }),
       },
       orderBy: { scheduledDate: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

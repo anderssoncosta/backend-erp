@@ -59,8 +59,8 @@ export class HrService {
       },
       include: { position: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

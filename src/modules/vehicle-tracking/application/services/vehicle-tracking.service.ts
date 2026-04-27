@@ -34,7 +34,7 @@ export class VehicleTrackingService {
     return this.prisma.vehiclePosition.findMany({
       where: { tenantId, vehicleId, ...(timestamp && { timestamp }) },
       orderBy: { timestamp: 'desc' },
-      take: limit,
+      take: Number(limit),
     });
   }
 

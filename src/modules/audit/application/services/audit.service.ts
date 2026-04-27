@@ -50,8 +50,8 @@ export class AuditService {
         ...(createdAt && { createdAt }),
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

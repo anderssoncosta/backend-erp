@@ -29,8 +29,8 @@ export class SafetyService {
     return this.prisma.safetyDocument.findMany({
       where: { tenantId, ...(type && { type }), ...(userId && { userId }), ...(status && { status }) },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -56,8 +56,8 @@ export class SafetyService {
     return this.prisma.pPEDelivery.findMany({
       where: { tenantId, ...(userId && { userId }) },
       orderBy: { deliveredAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -85,8 +85,8 @@ export class SafetyService {
     return this.prisma.incident.findMany({
       where: { tenantId, ...(type && { type }), ...(severity && { severity }), ...(status && { status }) },
       orderBy: { occurredAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

@@ -21,7 +21,7 @@ export class ContractsService {
       where: { tenantId, deletedAt: null, ...(clientId && { clientId }), ...(status && { status }), ...(type && { type }), ...expiryFilter },
       include: { client: { select: { id: true, name: true } }, serviceTypes: true, _count: { select: { serviceOrders: true } } },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (Number(page) - 1) * Number(limit), take: Number(limit),
     });
   }
 

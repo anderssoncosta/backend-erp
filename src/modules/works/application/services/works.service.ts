@@ -36,8 +36,8 @@ export class WorksService {
       where: { tenantId, deletedAt: null, ...(status && { status }), ...(type && { type }), ...(clientId && { clientId }) },
       include: { _count: { select: { fronts: true, measurements: true } } },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

@@ -24,7 +24,7 @@ export class ClientsService {
       },
       include: { contacts: { where: { isPrimary: true } }, _count: { select: { contracts: true, serviceOrders: true } } },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * limit, take: limit,
+      skip: (Number(page) - 1) * Number(limit), take: Number(limit),
     });
   }
 

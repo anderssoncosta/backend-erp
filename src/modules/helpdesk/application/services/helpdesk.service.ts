@@ -30,8 +30,8 @@ export class HelpdeskService {
       where: { tenantId, ...(status && { status }), ...(priority && { priority }), ...(assignedToId && { assignedToId }) },
       include: { _count: { select: { comments: true } } },
       orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

@@ -9,8 +9,8 @@ export class FieldExecutionService {
     return this.prisma.fieldExecution.findMany({
       where: { tenantId, ...(userId && { userId }), ...(serviceOrderId && { serviceOrderId }), ...(status && { status }) },
       orderBy: { checkInAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

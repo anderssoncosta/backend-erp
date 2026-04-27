@@ -42,8 +42,8 @@ export class PublicLightingService {
         }),
       },
       orderBy: { code: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -74,8 +74,8 @@ export class PublicLightingService {
       where: { tenantId, ...(status && { status }), ...(type && { type }), ...(technicianId && { technicianId }) },
       include: { lightingPoint: { select: { id: true, code: true, address: true } } },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

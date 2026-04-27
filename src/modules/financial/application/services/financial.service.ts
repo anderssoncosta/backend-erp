@@ -10,8 +10,8 @@ export class FinancialService {
       where: { tenantId, ...(status && { status }), ...(clientId && { clientId }) },
       include: { items: true },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -33,8 +33,8 @@ export class FinancialService {
     return this.prisma.expense.findMany({
       where: { tenantId, ...(status && { status }), ...(category && { category }), ...(userId && { userId }) },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 

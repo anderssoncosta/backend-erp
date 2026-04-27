@@ -37,8 +37,8 @@ export class FleetService {
     return this.prisma.vehicle.findMany({
       where: { tenantId, isActive: true, ...(status && { status }), ...(branchId && { branchId }) },
       orderBy: { plate: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -87,8 +87,8 @@ export class FleetService {
       where: { tenantId, ...(vehicleId && { vehicleId }) },
       include: { vehicle: { select: { id: true, plate: true, model: true } } },
       orderBy: { performedAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 }

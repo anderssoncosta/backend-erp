@@ -16,8 +16,8 @@ export class InventoryService {
     return this.prisma.stockMovement.findMany({
       where: { tenantId, ...(materialId && { materialId }), ...(branchId && { branchId }), ...(type && { type }) },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -26,8 +26,8 @@ export class InventoryService {
       where: { tenantId },
       include: { items: true },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
@@ -42,8 +42,8 @@ export class InventoryService {
       },
       include: { group: true },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
     });
   }
 
