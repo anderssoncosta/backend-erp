@@ -27,6 +27,18 @@ export class InventoryController {
     private readonly inventoryService: InventoryService,
   ) {}
 
+  @Get()
+  @ApiOperation({ summary: 'List materials (root)' })
+  @Permissions('inventory', 'read')
+  listMaterials(
+    @CurrentTenant() tenantId: string,
+    @Query('search') search?: string,
+    @Query('page') page = 1,
+    @Query('pageSize') pageSize = 20,
+  ) {
+    return this.inventoryService.getMaterials(tenantId, search, page, pageSize);
+  }
+
   @Get('stock')
   @ApiOperation({ summary: 'List stock positions' })
   @Permissions('inventory', 'read')
